@@ -12,6 +12,16 @@
                 bottom: 0;
                 left: 0;
             }
+            .ace_marker-layer .misspelled {
+                position: absolute;
+                z-index: -2;
+                border-bottom: 1px solid red;
+                margin-bottom: -1px;
+            }
+            .misspelled {
+                border-bottom: 1px solid red;
+                margin-bottom: -1px;
+            }
         </style>
     </head>
     <body>
@@ -24,11 +34,13 @@
 правильную цель. Конкретную, измеримую и понятную. Без этого не получится.
         </div>
 
-
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
         <script src="https://cdn.jsdelivr.net/ace/1.2.3/min/ace.js"></script>
+        <script src="https://api.glvrd.ru/v1/glvrd.js"></script>
         <script>
             const remote = require('electron').remote;
             var editor = ace.edit("editor"),
+                Range = ace.require('ace/range').Range,
                 dialog = remote.require('dialog'),
                 fs = require('fs'),
                 template = null,
@@ -37,12 +49,42 @@
                 openedFileName = null;
             const Menu = remote.Menu;
             const MenuItem = remote.MenuItem;
-
             editor.setTheme("ace/theme/monokai");
-            editor.getSession().setMode("ace/mode/javascript");
+
+            editor.getSession().setMode("ace/mode/markdown");
             editor.getSession().setUseWrapMode(true);
             editor.$blockScrolling = Infinity;
 
+            editor.getSession().addGutterDecoration(2, "misspelled");
+
+
+            glvrd.getStatus(function (d) {
+                if (d.status == 'ok') {
+                    var document = editor.getSession().getDocument(),
+                        annotations = [];
+                    glvrd.proofread(editor.getValue(), function (data) {
+                        console.log(data);
+                        _.each(data.fragments, function (fragment) {
+                            var startIndex = fragment.start,
+                                endIndex = fragment.end,
+                                start = null,
+                                end = null;
+                            start = document.indexToPosition(startIndex, 0);
+                            end = document.indexToPosition(endIndex, 0);
+                            editor.getSession().addGutterDecoration(start.row, "misspelled");
+                            editor.getSession().addGutterDecoration(start.column, "misspelled");
+                            editor.getSession().addMarker(new Range(start.row, start.column, end.row, end.column), "misspelled", "typo", true);
+                            annotations.push({
+                                row: start.row,
+                                column: start.column,
+                                text: fragment.hint.name + '\n\t' + fragment.hint.description,
+                                type: "warning"
+                            });
+                        });
+                        editor.getSession().setAnnotations(annotations);
+                    })
+                }
+            });
 
             template = [
                 {label: 'electron'},
