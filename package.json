@@ -1,0 +1,25 @@
+{
+  "name": "electron-text-editor-demo",
+  "version": "0.0.1",
+  "description": "A minimal Electron text editor",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atom/electron-quick-start.git"
+  },
+  "keywords": [
+    "Electron",
+    "text",
+    "editor",
+    "demo"
+  ],
+  "author": "Melevir",
+  "license": "",
+  "devDependencies": {
+    "electron-prebuilt": "^0.36.0",
+    "electron-reload": "0.2.0"
+  }
+}
