@@ -53,7 +53,6 @@
 
             editor.getSession().setMode("ace/mode/markdown");
             editor.getSession().setUseWrapMode(true);
-            editor.$blockScrolling = Infinity;
 
             var checkWithGlvrd = function () {
                     glvrd.getStatus(function (d) {
@@ -108,8 +107,6 @@
                 },
                 updateLastOpenedFiles = function (filePath) {
                     var currentList = getLastOpenedFiles();
-                    console.log(filePath);
-                    console.log(currentList);
                     if (currentList.indexOf(filePath) > -1) {
                         return;
                     }
@@ -119,7 +116,7 @@
                 openFile = function (fileName) {
                     openedFileName = fileName;
                     fs.readFile(fileName, 'utf-8', function (err, data) {
-                        editor.setValue(data);
+                        editor.setValue(data, -1);
                         updateLastOpenedFiles(fileName);
                         checkWithGlvrd();
                     });
