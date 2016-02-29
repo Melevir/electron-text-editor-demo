@@ -1,36 +1,136 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Hello World!</title>
+    <head>
+        <meta charset="UTF-8">
+        <title>Hello World!</title>
 
-    <style type="text/css" media="screen">
-    #editor {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-    }
-</style>
-  </head>
-  <body>
-    <div id="editor">Цель
+        <style type="text/css" media="screen">
+            #editor {
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                left: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="editor">Цель
 Начать составление плана нужно с конечной цели. Это кажется очевидным, но нельзя
 достигнуть цели, если неизвестно, о чём речь. Определиться с конечной целью — первый
 и важный этап. Формулировка цели — отправная точка для решений в будущем.
 Иногда получается, что цель неактуальна или что она не одна — это нормально.
 Такие выводы — ценная информация сами по себе. Главное — подумать и выбрать
 правильную цель. Конкретную, измеримую и понятную. Без этого не получится.
-    </div>
+        </div>
 
 
-  <script src="https://cdn.jsdelivr.net/ace/1.2.3/min/ace.js"></script>
-  <script>
-    var editor = ace.edit("editor");
-    editor.setTheme("ace/theme/monokai");
-    editor.getSession().setMode("ace/mode/javascript");
-    editor.getSession().setUseWrapMode(true);
-</script>
-  </body>
+        <script src="https://cdn.jsdelivr.net/ace/1.2.3/min/ace.js"></script>
+        <script>
+            const remote = require('electron').remote;
+            var editor = ace.edit("editor"),
+                dialog = remote.require('dialog'),
+                fs = require('fs'),
+                template = null,
+                menu = null,
+
+                openedFileName = null;
+            const Menu = remote.Menu;
+            const MenuItem = remote.MenuItem;
+
+            editor.setTheme("ace/theme/monokai");
+            editor.getSession().setMode("ace/mode/javascript");
+            editor.getSession().setUseWrapMode(true);
+            editor.$blockScrolling = Infinity;
+
+
+            template = [
+                {label: 'electron'},
+                {
+                    label: 'File',
+                    submenu: [
+                        {
+                            label: 'Open',
+                            accelerator: 'CmdOrCtrl+O',
+                            click: function(item, focusedWindow) {
+                                dialog.showOpenDialog({ filters: [
+                                    { name: 'Markdown', extensions: ['md'] }
+                                ]}, function (fileNames) {
+                                    if (fileNames === undefined) return;
+                                    var fileName = fileNames[0];
+                                    openedFileName = fileName;
+                                    fs.readFile(fileName, 'utf-8', function (err, data) {
+                                        editor.setValue(data);
+                                    });
+                                });
+                            }
+                        },
+                        {
+                            label: 'Save',
+                            accelerator: 'CmdOrCtrl+S',
+                            click: function(item, focusedWindow) {
+                                if (openedFileName === null) return;
+                                fs.writeFile(openedFileName, editor.getValue());
+                            },
+                        },
+                        {
+                            label: 'Save as...',
+                            accelerator: 'Shift+CmdOrCtrl+S',
+                            click: function(item, focusedWindow) {
+                                dialog.showSaveDialog({ filters: [
+                                    { name: 'Markdown', extensions: ['md'] }
+                                ]}, function (fileName) {
+                                    if (fileName === undefined) return;
+                                    openedFileName = fileName;
+                                    fs.writeFile(fileName, editor.getValue());
+                                });
+                            },
+                        }
+                    ]
+                },
+                {
+                    label: 'View',
+                    submenu: [
+                        {
+                            label: 'Reload',
+                            accelerator: 'CmdOrCtrl+R',
+                            click: function(item, focusedWindow) {
+                                if (focusedWindow)
+                                focusedWindow.reload();
+                            }
+                        },
+                        {
+                            label: 'Toggle Full Screen',
+                            accelerator: (function() {
+                                if (process.platform == 'darwin')
+                                    return 'Ctrl+Command+F';
+                                else
+                                    return 'F11';
+                                })(),
+                            click: function(item, focusedWindow) {
+                                if (focusedWindow)
+                                    focusedWindow.setFullScreen(!focusedWindow.isFullScreen());
+                            }
+                        },
+                        {
+                            label: 'Toggle Developer Tools',
+                            accelerator: (function() {
+                                if (process.platform == 'darwin')
+                                    return 'Alt+Command+I';
+                                else
+                                    return 'Ctrl+Shift+I';
+                            })(),
+                            click: function(item, focusedWindow) {
+                                if (focusedWindow)
+                                    focusedWindow.toggleDevTools();
+                            }
+                        }
+                    ]
+                }
+            ];
+            menu = Menu.buildFromTemplate(template);
+            Menu.setApplicationMenu(menu);
+            Menu.setApplicationMenu(menu);
+        </script>
+    </body>
 </html>
