@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta charset="UTF-8">
-        <title>Hello World!</title>
+        <title>Electron text editor demo</title>
 
         <style type="text/css" media="screen">
             #editor {
@@ -45,7 +45,7 @@
                 fs = require('fs'),
                 template = null,
                 menu = null,
-
+                highlitedMarkersIds = [],
                 openedFileName = null;
             const Menu = remote.Menu;
             const MenuItem = remote.MenuItem;
@@ -55,37 +55,88 @@
             editor.getSession().setUseWrapMode(true);
             editor.$blockScrolling = Infinity;
 
-            editor.getSession().addGutterDecoration(2, "misspelled");
+            var checkWithGlvrd = function () {
+                    glvrd.getStatus(function (d) {
+                        if (d.status == 'ok') {
+                            var document = editor.getSession().getDocument(),
+                                annotations = [];
+                            glvrd.proofread(editor.getValue(), function (data) {
+                                _.each(highlitedMarkersIds, function (markerId) {
+                                    editor.getSession().removeMarker(markerId);
+                                });
+                                highlitedMarkersIds = []
+                                _.each(data.fragments, function (fragment) {
+                                    var startIndex = fragment.start,
+                                        endIndex = fragment.end,
+                                        start = null,
+                                        end = null;
+                                    start = document.indexToPosition(startIndex, 0);
+                                    end = document.indexToPosition(endIndex, 0);
+                                    highlitedMarkersIds.push(editor.getSession().addMarker(
+                                            new Range(start.row, start.column, end.row, end.column),
+                                            "misspelled",
+                                            "typo",
+                                            true
+                                    ));
+                                    annotations.push({
+                                        row: start.row,
+                                        column: start.column,
+                                        text: fragment.hint.name + '\n\t' + fragment.hint.description,
+                                        type: "warning"
+                                    });
+                                });
+                                editor.getSession().setAnnotations(annotations);
+                            })
+                        }
+                    });
+                },
+                saveTextAs = function () {
+                    dialog.showSaveDialog({ filters: [
+                        { name: 'Markdown', extensions: ['md'] }
+                    ]}, function (fileName) {
+                        if (fileName === undefined) return;
+                        openedFileName = fileName;
+                        fs.writeFile(fileName, editor.getValue());
+                    });
+                },
+                getLastOpenedFiles = function () {
+                    var rawList = localStorage['lastOpenedFiles'];
+                    if (rawList === undefined) {
+                        return [];
+                    }
+                    return JSON.parse(rawList);
+                },
+                updateLastOpenedFiles = function (filePath) {
+                    var currentList = getLastOpenedFiles();
+                    console.log(filePath);
+                    console.log(currentList);
+                    if (currentList.indexOf(filePath) > -1) {
+                        return;
+                    }
+                    currentList.push(filePath);
+                    localStorage.setItem('lastOpenedFiles', JSON.stringify(currentList));
+                },
+                openFile = function (fileName) {
+                    openedFileName = fileName;
+                    fs.readFile(fileName, 'utf-8', function (err, data) {
+                        editor.setValue(data);
+                        updateLastOpenedFiles(fileName);
+                        checkWithGlvrd();
+                    });
+                };
 
 
-            glvrd.getStatus(function (d) {
-                if (d.status == 'ok') {
-                    var document = editor.getSession().getDocument(),
-                        annotations = [];
-                    glvrd.proofread(editor.getValue(), function (data) {
-                        console.log(data);
-                        _.each(data.fragments, function (fragment) {
-                            var startIndex = fragment.start,
-                                endIndex = fragment.end,
-                                start = null,
-                                end = null;
-                            start = document.indexToPosition(startIndex, 0);
-                            end = document.indexToPosition(endIndex, 0);
-                            editor.getSession().addGutterDecoration(start.row, "misspelled");
-                            editor.getSession().addGutterDecoration(start.column, "misspelled");
-                            editor.getSession().addMarker(new Range(start.row, start.column, end.row, end.column), "misspelled", "typo", true);
-                            annotations.push({
-                                row: start.row,
-                                column: start.column,
-                                text: fragment.hint.name + '\n\t' + fragment.hint.description,
-                                type: "warning"
-                            });
-                        });
-                        editor.getSession().setAnnotations(annotations);
-                    })
+            editor.commands.addCommand({
+                name: "glvrd",
+                bindKey: {win: "Ctrl-G", mac: "Command-G"},
+                exec: function(editor) {
+                    checkWithGlvrd();
+
                 }
             });
-
+            editor.on('change', function(){
+                checkWithGlvrd();
+            });
             template = [
                 {label: 'electron'},
                 {
@@ -100,10 +151,7 @@
                                 ]}, function (fileNames) {
                                     if (fileNames === undefined) return;
                                     var fileName = fileNames[0];
-                                    openedFileName = fileName;
-                                    fs.readFile(fileName, 'utf-8', function (err, data) {
-                                        editor.setValue(data);
-                                    });
+                                    openFile(fileName);
                                 });
                             }
                         },
@@ -111,7 +159,9 @@
                             label: 'Save',
                             accelerator: 'CmdOrCtrl+S',
                             click: function(item, focusedWindow) {
-                                if (openedFileName === null) return;
+                                if (openedFileName === null) {
+                                    saveTextAs();
+                                };
                                 fs.writeFile(openedFileName, editor.getValue());
                             },
                         },
@@ -119,14 +169,58 @@
                             label: 'Save as...',
                             accelerator: 'Shift+CmdOrCtrl+S',
                             click: function(item, focusedWindow) {
-                                dialog.showSaveDialog({ filters: [
-                                    { name: 'Markdown', extensions: ['md'] }
-                                ]}, function (fileName) {
-                                    if (fileName === undefined) return;
-                                    openedFileName = fileName;
-                                    fs.writeFile(fileName, editor.getValue());
-                                });
+                                saveTextAs();
                             },
+                        }
+                    ]
+                },
+                {
+                    label: 'Edit',
+                    submenu: [
+                        {
+                            label: 'Undo',
+                            accelerator: 'CmdOrCtrl+Z',
+                            role: 'undo'
+                        },
+                        {
+                            label: 'Redo',
+                            accelerator: 'Shift+CmdOrCtrl+Z',
+                            role: 'redo'
+                        },
+                        {
+                            type: 'separator'
+                        },
+                        {
+                            label: 'Cut',
+                            accelerator: 'CmdOrCtrl+X',
+                            role: 'cut',
+                        },
+                        {
+                            label: 'Copy',
+                            accelerator: 'CmdOrCtrl+C',
+                            role: 'copy'
+                        },
+                        {
+                            label: 'Paste',
+                            accelerator: 'CmdOrCtrl+V',
+                            role: 'paste'
+                        },
+                        {
+                            label: 'Select All',
+                            accelerator: 'CmdOrCtrl+A',
+                            role: 'selectall'
+                        },
+                    ]
+                },
+                {
+                    label: 'Tools',
+                    submenu: [
+                        {
+                            label: 'Check with Glvrd',
+                            accelerator: 'CmdOrCtrl+G',
+                            click: function(item, focusedWindow) {
+                                checkWithGlvrd();
+                            }
                         }
                     ]
                 },
@@ -170,9 +264,23 @@
                     ]
                 }
             ];
+
+            var lastOpenedFiles = getLastOpenedFiles();
+            if (lastOpenedFiles) {
+                template[1].submenu.push({
+                    type: 'separator'
+                });
+            }
+            _.each(lastOpenedFiles, function (filePath) {
+                var fileParts = filePath.split('/');
+                template[1].submenu.push({  // File menu
+                    label: fileParts[fileParts.length - 1],
+                    click: function () { openFile(filePath); }
+                });
+            });
             menu = Menu.buildFromTemplate(template);
             Menu.setApplicationMenu(menu);
-            Menu.setApplicationMenu(menu);
+            checkWithGlvrd();
         </script>
     </body>
 </html>
